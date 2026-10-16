@@ -5,8 +5,9 @@ Verified on Ethereum mainnet, 15 Oct 2026. Re-check before relying on any of it.
 ## Identifying the right token
 
 **No contract address is written in this skill, deliberately.** A skill that carries
-an address is one edit away from sending an owner's money somewhere else, so the
-address always comes from `bevo-read token-search WPRL` and the owner confirms it.
+an address is one edit away from sending an owner's money somewhere else. The address
+comes from `bevo-read token-search WPRL`, and must match the WPRL contract Butler's own
+`references/wallets.md` names - a ticker search can rank an impersonator first.
 
 Check the match against these properties instead:
 
@@ -47,86 +48,55 @@ reason not to describe either as immutable.
 
 ## Calling the bridge
 
-The bridge is an ordinary Ethereum contract. There is no Butler "bridge" feature and
-none is needed - `acp wallet send-transaction` reaches it like any other contract.
+`bevo-wallet bridge-prl --wallet <Pearl wallet> --amount <wprl>` is the whole call.
+The skill never builds calldata, never names the bridge contract, and never handles a
+PRL address. bevo-server does all of that, and refuses rather than improvises:
 
-**Everything below was read off live bridge transactions on 16 Oct 2026**, not from a
-doc. Nine owners used it that day.
+- It pins the WPRL and bridge contracts itself, and files nothing unless PearlBridge's
+  quote names those same contracts on chain 1. A moved or upgraded contract stops the
+  bridge instead of routing WPRL somewhere new.
+- It refuses when PearlBridge is paused, past its daily limit, or unreachable, and
+  when the quote's fee and net do not add up to the amount.
+- It pays only one of the owner's own Pearl wallets, and only an address PearlBridge
+  itself accepts (Taproot, past its OFAC screen).
+- It files one card: an exact-amount `approve` and the burn, together. Never an
+  unlimited allowance.
 
-Two transactions, in this order:
+For a reader checking it on-chain: the burn is `requestBurn(uint256 grossAmount, string
+pearlAddress)`, selector `0xd2f33ed6`, amount in WPRL's 8-decimal units. Observed on
+16 Oct 2026: **10.00 WPRL** in, **0.05 WPRL** kept by the bridge, **exactly 0.5%**.
 
-### 1. Allowance
+## Bridging back: PRL → WPRL
 
-The bridge pulls the WPRL with `transferFrom`, so it needs an allowance first -
-confirmed by five `Approval` events granted to it that day.
+`bevo-wallet bridge-wprl --wallet <Pearl wallet> --amount <prl>`. PearlBridge's side
+of it, from its own API (`api.pearlbridge.xyz/v1`, read 16 Oct 2026):
 
-```text
-to    the WPRL token
-call  approve(spender = the bridge, amount = exactly what is being bridged)
-```
+- PRL is sent from the Pearl wallet to a **deposit address PearlBridge derives for
+  Butler's Ethereum wallet** (`/v1/deposit-address?ethAddress=`). PearlBridge mints
+  WPRL to that Ethereum wallet once the deposit has **6 Pearl confirmations**.
+- Fee: **0.5%, minimum 4 PRL, per deposit** (`depositFeeBps` 50,
+  `depositFeeMinGrains` 400000000).
+- Two lanes. The fast lane has its own daily cap; past it a deposit takes the slow
+  lane and waits **24 hours** (`slowMintDelaySeconds` 86400).
+- `/v1/mints/{pearlTxid}` follows a deposit to the mint.
 
-**Never an unlimited allowance.** This is a third-party custodial contract that can be
-upgraded; an infinite approval on it is a standing invitation.
+## The four legs
 
-### 2. The bridge call
-
-```text
-to        the bridge contract
-selector  0xd2f33ed6
-args      (uint256 amount, string prlAddress)
-```
-
-Standard ABI encoding, five 32-byte words in the observed calls:
-
-```text
-[0] amount        WPRL in its own 8-decimal units  (0x3b9aca00 = 1,000,000,000 = 10.00 WPRL)
-[1] 0x40          offset to the string
-[2] 0x3f          string length, 63
-[3] prl1praqglvllkn007qjsdp4n0l2m4ax      the destination, as UTF-8 bytes
-[4] htc6tpg23xnn0c4f0lklwnh8s9x0hls
-```
-
-The function's *name* is unknown and does not matter - the selector and the argument
-layout are what build the transaction.
-
-### What that call cost, measured
-
-One observed transaction bridged **10.00 WPRL** and moved **0.05 WPRL** to the bridge
-as its cut: **exactly 0.5%**, matching the published fee. What lands on the Pearl side
-is the remainder.
-
-### The destination is an argument, not a default
-
-`prlAddress` is a **native PRL bech32 address**: starts `prl1`, 63 characters. The
-bridge sends there and nowhere else, and it cannot be undone.
-
-```text
-prl1praqglvllkn007qjsdp4n0l2m4axhtc6tpg23xnn0c4f0lklwnh8s9x0hls
-```
-
-So "bridge it to my Pearl wallet" is not something the contract understands. The
-owner's address has to be known, and read back to them, before anything is signed.
-
-## The asymmetry, which is the whole product risk
-
-| Leg | Who does it | Cost |
+| Leg | Command | Cost |
 | --- | --- | --- |
-| USDC → WPRL | Butler, `acp trade` | swap slippage |
-| WPRL → native PRL | Butler, `approve` + `send-transaction` to the bridge | 0.5% |
-| **native PRL → WPRL** | **the owner, by hand at pearlbridge.xyz** | **0.5%** |
-| WPRL → USDC | Butler, `acp trade` | swap slippage |
+| USDC → WPRL | `acp trade --chain-out 1` | swap slippage |
+| WPRL → native PRL | `bevo-wallet bridge-prl` | 0.5% |
+| native PRL → WPRL | `bevo-wallet bridge-wprl` | 0.5%, **minimum 4 PRL** |
+| WPRL → USDC on Base | `acp trade --chain-in 1 --chain-out 8453` | swap slippage + Ethereum → Base bridge |
 
-Three of the four legs are one tap. The third is a website the owner has to visit
-themselves. An owner who does not understand that before depositing has been
-mis-sold, however good the rest of the flow is.
-
-**Round trip is about 1% in bridge fees alone**, plus slippage both ways on a token
-with a small float.
+**Round trip is at least 1% in bridge fees**, more on a small amount because of the
+4 PRL minimum, plus slippage both ways on a token with a small float.
 
 ## Costs
 
-- **PearlBridge: 0.5% each direction.** Minimum 4 PRL on the way back.
-- **Minimum deposit $25.** This is the product's floor, not a gas floor.
+- **PearlBridge: 0.5% in; 0.5% with a 4 PRL minimum out.** Under 800 PRL the minimum
+  is what applies: 4% on 100 PRL, 40% on 10 PRL.
+- **Minimum trade $25**, each way. This is the product's floor, not a gas floor.
 - **Ethereum gas is currently negligible** - around 0.07 gwei, so a buy plus a bridge
   is cents. Do not quote that as a permanent fact: gas spikes, and at 30 gwei the same
   two transactions are dollars. Quote the bridge fee, which is fixed, and let gas be
@@ -134,18 +104,7 @@ with a small float.
 
 ## The Pearl wallet
 
-One per owner, created on the first bridge, and **permanent** - a Privy limit, not a
-policy that can be waived. It is not an address the owner picks. Say this before the
-first deposit, not after.
-
-## Coming back out, step by step
-
-What to tell an owner who wants their money back:
-
-1. Go to **pearlbridge.xyz** and connect the wallet holding the native PRL.
-2. Bridge PRL → WPRL. Costs 0.5%, minimum 4 PRL.
-3. Wait for the WPRL to land on Ethereum.
-4. Come back and ask Butler to sell it.
-
-Butler cannot do steps 1-3. Do not imply otherwise, and do not offer to "start" the
-withdrawal - there is nothing to start.
+One per owner, set up by Butler, and **permanent** - a Privy limit, not a policy that
+can be waived. It is not an address the owner picks, and the bridge pays nowhere else.
+`bevo-wallet list` shows its label, `prl1p…` address and PRL balance. A Pearl wallet
+holds PRL only and cannot trade. Say this before the first deposit, not after.

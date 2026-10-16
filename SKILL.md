@@ -1,197 +1,193 @@
 ---
 name: pearl-prl
-description: Move money in and out of Pearl - buy WPRL on Ethereum and bridge it to native PRL, or sell WPRL back to USDC - and say plainly that the way out is not automatic.
+description: Move money in and out of Pearl - buy native PRL with USDC by way of WPRL on Ethereum and PearlBridge, or bridge PRL back to WPRL and sell it for USDC on Base.
 version: 0.1.0
-metadata: {"butler":{"moneyMoving":true,"keywords":["prl","pearl","wprl","buy prl","sell prl","bridge prl","native prl","pearl wallet","pearlbridge","wrapped pearl","get prl","cash out prl"],"requires":{"bins":["acp","bevo-read"]}}}
+metadata: {"butler":{"moneyMoving":true,"keywords":["prl","pearl","wprl","buy prl","sell prl","bridge prl","native prl","pearl wallet","pearlbridge","wrapped pearl","get prl","cash out prl"],"requires":{"bins":["acp","bevo-read","bevo-wallet"]}}}
 ---
 
 ## When to use
 
 Your owner wants to hold **native PRL**, or wants their PRL back as cash:
 
-- **In** - "buy me some PRL", "get PRL into my Pearl wallet": buy **WPRL** on Ethereum
-  with USDC, then bridge it to native PRL.
-- **Out** - "sell my PRL", "cash out of Pearl": sell **WPRL** back to USDC. The
-  PRL → WPRL half is **not** something Butler can do; see below.
+- **Buy** - "buy me some PRL", "get PRL into my Pearl wallet": buy **WPRL** on
+  Ethereum with USDC, then bridge it into their Pearl wallet.
+- **Sell** - "sell my PRL", "cash out of Pearl": bridge their PRL back to **WPRL**,
+  wait for it to land, then sell it for USDC on Base.
 - **Check** - what they hold, on either side.
 
-Not this skill: anything on Pearl itself once the PRL is there, and PRL → WPRL, which
-has no Butler command and has to be done by hand on a third-party website.
+Not this skill: sending PRL to someone (`bevo-send`), or anything on Pearl itself.
 
 ## Before you start
 
-Four things, and the first one decides whether to go ahead at all.
+1. **PearlBridge is a third party holding the money mid-flight.** Not Virtuals, not
+   Pearl. Custodial, upgradeable, and neither Butler nor Virtuals can recover a stuck
+   bridge. Say so before the first bridge either way.
 
-1. **The way out is not automatic, and they must hear it before any money moves.**
-   Butler can take them *in* - buy and bridge - in one flow. Coming *back* needs them
-   to go to **pearlbridge.xyz** themselves, connect a wallet, and bridge PRL → WPRL by
-   hand before Butler can sell it. If that is not something they will do, do not start.
+2. **The fees are not symmetric.** Into PRL: **0.5%**. Back out to WPRL: **0.5% with a
+   4 PRL minimum** per bridge - on 100 PRL that is 4%, on 10 PRL it is 40%. Quote the
+   fee in PRL, not as a percentage, whenever the amount is under 800 PRL.
 
-2. **PearlBridge is a third party holding the money mid-flight.** Not Virtuals, not
-   Pearl. It takes **0.5% each way**, so a round trip costs about **1%** before any
-   trading cost. Say this as a fee, not a detail.
+3. **Trades are on Ethereum, $25 minimum** each way.
 
-3. **How much, and where it comes from.** Minimum is **$25** of USDC, on Ethereum.
+4. **The PRL lives in their Pearl wallet, and only there.** One per owner and
+   permanent (a Privy limit). The bridge pays nowhere else, so never ask for an
+   address.
 
-4. **The Pearl wallet is one per owner and permanent**, and **the bridge needs its
-   address as an argument.** It is not implicit: the contract takes a native PRL
-   address (`prl1…`, 63 characters) and sends there. Butler must have that address
-   before bridging, and must read it back to the owner before signing - a wrong one
-   sends the money to a stranger, irreversibly.
-
-Read what they actually hold before proposing anything, and resolve WPRL to an exact
-contract rather than trusting any address written down anywhere:
+Read what they hold before proposing anything. `bevo-wallet list` shows their Pearl
+wallet's label, its `prl1p…` address and its PRL balance:
 
 ```sh
 bevo-read assets
+bevo-wallet list
+```
+
+Resolve WPRL to an exact contract rather than trusting a ticker:
+
+```sh
 bevo-read token-search WPRL
 ```
 
-Show the owner the matches and have them pick, even when there is only one. The right
-one is **Wrapped Pearl (WPRL) on Ethereum, 8 decimals**. Never guess a contract and
-never paste one from notes - a wrong address here sends their money to a stranger.
+The right one is **Wrapped Pearl (WPRL) on Ethereum, 8 decimals**, and it must be the
+WPRL contract in Butler's own `references/wallets.md`. A ticker search can rank an
+impersonator first: if the two disagree, stop and ask the owner. Never guess a
+contract and never paste one from notes.
 
 ## Procedure
 
-### Buying in
+### Buying PRL
 
-1. [ADAPT] Say the whole shape back to them in one message, with the exit named first.
-   `references/pearl.md` has the numbers. Something like:
+1. [ADAPT] Say the whole shape back in one message. `references/pearl.md` has the
+   numbers. Something like:
 
    ```text
-   $100 of USDC becomes about $99.50 of native PRL.
-   PearlBridge takes 0.5% on the way in, and 0.5% again whenever you come back.
-   Coming back is not automatic: you would go to pearlbridge.xyz yourself and
-   bridge PRL to WPRL by hand before I can sell it.
-   Your Pearl wallet is created once and is yours permanently.
+   $100 of USDC buys WPRL on Ethereum, then PearlBridge turns it into native PRL
+   in your Pearl wallet, keeping 0.5%. Coming back out costs 0.5% with a 4 PRL
+   minimum, plus the trade back to USDC.
    ```
 
-   Get a clear yes to **that**, not to "buy some PRL". A yes to the amount is not a
-   yes to the one-way exit.
+   Get a clear yes before moving anything.
 
-2. [FIXED] Buy WPRL with their USDC. This is a money command and renders an approval
-   card:
+2. [FIXED] Buy WPRL with their USDC. Money command, approval card:
 
    ```sh
    acp trade --token-in usdc --amount-in <AMOUNT_USD> --token-out <WPRL_ADDRESS> --chain-out 1 --idempotency-key <KEY>:buy
    ```
 
-   `<WPRL_ADDRESS>` is the contract the owner confirmed from `token-search`, never one
-   written into this skill. The chain flag is `--chain-out` when buying and
-   `--chain-in` when selling - it names the side the non-USDC token sits on, and
-   `--chain` is not a flag `acp trade` takes.
+   `<WPRL_ADDRESS>` is the contract confirmed above, never one written into this
+   skill. The chain flag is `--chain-out` when buying and `--chain-in` when selling -
+   it names the side WPRL sits on.
 
-3. [FIXED] Confirm the WPRL actually arrived before bridging. Bridging a balance that
-   is not there yet fails halfway:
+3. [FIXED] Confirm the WPRL arrived before bridging. Bridging a balance that is not
+   there yet fails:
 
    ```sh
    bevo-read token-balance <WPRL_ADDRESS>
    ```
 
-4. [FIXED] Let the bridge take the WPRL. It pulls with `transferFrom`, so it needs
-   an allowance first. Money command, approval card:
+4. [FIXED] Bridge it into their Pearl wallet. Money command, approval card:
 
    ```sh
-   acp wallet send-transaction --chain 1 --to <WPRL_ADDRESS> --data <APPROVE_CALLDATA> --idempotency-key <KEY>:approve
+   bevo-wallet bridge-prl --wallet <PEARL_LABEL> --amount <WPRL_AMOUNT> --idempotency-key <KEY>:bridge-in
    ```
 
-   `<APPROVE_CALLDATA>` is a standard ERC-20 `approve(spender, amount)` for exactly
-   the amount being bridged, with the bridge as spender. Never an unlimited
-   allowance: this is a third-party custodial contract.
+   `<PEARL_LABEL>` is their Pearl wallet's label from `bevo-wallet list`.
+   `<WPRL_AMOUNT>` is a plain decimal, at most 8 places - what step 3 showed, never a
+   base-unit number. Butler builds the approve and the burn itself against
+   PearlBridge's quote; the card shows what arrives after the fee.
 
-5. [FIXED] Bridge it. Second money command, second approval card:
+5. [ADAPT] Tell them what is on its way and where. PRL lands some minutes after the
+   card executes, 0.5% less than left.
 
-   ```sh
-   acp wallet send-transaction --chain 1 --to <BRIDGE_ADDRESS> --data <BRIDGE_CALLDATA> --idempotency-key <KEY>:bridge
-   ```
+### Selling PRL
 
-   `<BRIDGE_CALLDATA>` is selector `0xd2f33ed6` with two arguments: the amount in
-   WPRL's own 8-decimal units, and the owner's native PRL address as a string.
-   `references/pearl.md` has the exact encoding. **Read the destination address back
-   to the owner before this is signed.**
-
-6. [ADAPT] Tell them what landed and where, and repeat the exit once, briefly. The
-   bridge keeps 0.5%, so what arrives is slightly less than what left.
-
-### Selling out
-
-1. [ADAPT] Say the part Butler cannot do, first and without softening:
+1. [ADAPT] Say the whole shape back in one message, the fee in PRL:
 
    ```text
-   I can sell WPRL for you. I cannot turn native PRL back into WPRL - that part
-   is yours to do at pearlbridge.xyz, and it takes 0.5%.
+   PearlBridge turns your 500 PRL into about 496 WPRL on Ethereum (fee: 4 PRL),
+   then I sell that for USDC on Base. The bridge needs 6 Pearl confirmations;
+   a large amount can wait up to a day in PearlBridge's slow lane.
    ```
 
-   If they hold only native PRL, that is the whole answer: tell them the step, and
-   offer to sell once the WPRL shows up. Do not start anything.
+   Get a clear yes. If they already hold WPRL and want only that sold, skip to step 4.
 
-2. [FIXED] Once WPRL is in the wallet, check it is really there:
+2. [FIXED] Bridge PRL back to WPRL. Money command, approval card:
 
    ```sh
+   bevo-wallet bridge-wprl --wallet <PEARL_LABEL> --amount <PRL_AMOUNT> --idempotency-key <KEY>:bridge-out
+   ```
+
+   `<PRL_AMOUNT>` is a plain decimal, at most 8 places, no more than the Pearl
+   balance `bevo-wallet list` showed. The WPRL lands in Butler's Ethereum wallet.
+
+3. [FIXED] Wait for the WPRL to land before selling. Check the bridge, then the
+   balance; re-run these a few minutes apart until the WPRL is there:
+
+   ```sh
+   bevo-read request <KEY>:bridge-out
    bevo-read token-balance <WPRL_ADDRESS>
    ```
 
-3. [FIXED] Sell it:
+   **Never re-run the bridge because the WPRL is slow** - that is a second bridge and
+   a second 4 PRL minimum. Tell the owner it is still in flight.
+
+4. [FIXED] Sell the WPRL for USDC on Base. Money command, approval card:
 
    ```sh
-   acp trade --token-in <WPRL_ADDRESS> --chain-in 1 --amount-in <AMOUNT> --token-out usdc --idempotency-key <KEY>:sell
+   acp trade --token-in <WPRL_ADDRESS> --chain-in 1 --amount-in <WPRL_AMOUNT> --token-out usdc --chain-out 8453 --idempotency-key <KEY>:sell
    ```
+
+   `<WPRL_AMOUNT>` is what step 3 showed arrived. One command sells on Ethereum and
+   moves the USDC to Base; it blocks until the USDC lands, which can take a few
+   minutes. Keep it running rather than re-issuing.
+
+5. [ADAPT] Tell them how much USDC landed on Base.
 
 ## Idempotency and retries
 
 Reads are free - re-run `bevo-read` rather than trusting a balance from a minute ago.
 
-Buying, bridging and selling are money commands and are **not** idempotent on their
-own. One `--idempotency-key` per step, and if a step's outcome is unclear **do not
-re-run it** - a retried money command can spend twice. Look it up instead:
+Trades and bridges are money commands and are **not** idempotent on their own. One
+`--idempotency-key` per step, and if a step's outcome is unclear **do not re-run it**
+- a retried money command can spend twice. Look it up instead:
 
 ```sh
 bevo-read request <KEY>
 ```
 
-Bridging twice is the expensive mistake here: the second bridge is a second 0.5% fee
-on money that is already across.
+A second bridge is the expensive mistake: another fee on money already across, and
+on the way out another 4 PRL at least.
 
 ## Failure handling
 
 | Outcome | What to do |
 | --- | --- |
-| Owner will not use pearlbridge.xyz to come back | Do not buy. There is no other way out. |
-| Under $25 | Say the minimum and stop. Do not round them up to it. |
-| Not enough USDC on Ethereum | Say what they hold and where. Do not bridge USDC to cover it as a surprise. |
-| Buy filled but bridge failed | The WPRL is theirs and safe in their wallet. Say that first, then offer to bridge again. Never re-run the buy. |
-| Bridge outcome unclear | Look the key up. Never bridge again on a guess. |
-| Owner holds only native PRL and wants out | Give them the pearlbridge.xyz step. Offer to sell when the WPRL arrives. |
-| Approve filled but the bridge call failed | The WPRL is still theirs and still in their wallet. Say that first. Re-quote and offer the bridge again; never re-run the buy. |
-| No native PRL address for the owner | Stop. The bridge cannot be called without one, and guessing it loses the money. |
-| Owner's PRL address does not start `prl1` or is not 63 characters | Refuse. Do not send to it. |
-| `token-search WPRL` returns nothing, or several | Ask the owner for the contract, or stop. Never pick one yourself. |
+| Under $25 to buy, or WPRL worth under $25 to sell | Say the minimum and stop. Do not round them up to it. |
+| Selling under ~40 PRL | The 4 PRL minimum is over 10%. Say the number and let them decide. |
+| Not enough USDC on Ethereum | Say what they hold and where. Do not move USDC to cover it as a surprise. |
+| Buy filled but bridge-in failed | The WPRL is theirs, in their Ethereum wallet. Say that first, then offer to bridge again. Never re-run the buy. |
+| Bridge-out sent, WPRL not yet landed | Still in flight: 6 confirmations, or the slow lane. Check again later. Never bridge again. |
+| Bridge-out failed | The PRL is still theirs, in their Pearl wallet. Say that first. |
+| WPRL landed but the sale failed | The WPRL is theirs, in their Ethereum wallet. Offer to sell again. Never bridge again. |
+| PearlBridge paused, unreachable, or past its daily limit | Nothing moved. Say so, and offer later or a smaller amount. |
+| Bridge refuses its own quote as untrusted | Stop. A contract moved or was upgraded; do not work around it. |
+| `token-search WPRL` disagrees with `references/wallets.md` | Ask the owner, or stop. Never pick one yourself. |
 
 ## Limits
 
-- **One direction is automated.** In: buy, approve, bridge. Out: selling WPRL only.
-  PRL → WPRL is manual, on a third-party site.
-- **The bridge is a contract call, not a Butler feature.** It is reached with
-  `acp wallet send-transaction` on Ethereum, like any other contract.
-- **PearlBridge is custodial and third-party**, 0.5% each way. Funds sit with it
-  mid-flight. Neither Virtuals nor Butler controls it or can recover a stuck bridge.
+- **PearlBridge is custodial and third-party.** Funds sit with it mid-flight.
 - **WPRL and the bridge are both upgradeable contracts.** Whoever holds the upgrade
   key can change how either behaves. Disclose it if asked what the risk is.
-- Ethereum mainnet only, $25 minimum.
-- One Pearl wallet per owner, created once, permanent.
+- Trades on Ethereum only, $25 minimum. Sales settle as USDC on Base.
+- One Pearl wallet per owner, permanent. A Pearl wallet cannot trade.
 - Not advice. Move what they ask for; never suggest the size or call PRL a good buy.
 
 ## Say to the owner
 
-Before buying, with the exit in the same breath as the price:
+Before buying: "$100 of USDC gets you about $99.50 of native PRL - PearlBridge takes
+0.5%. Selling later costs 0.5% with a 4 PRL minimum on the bridge back. Go ahead?"
 
-"$100 of USDC gets you about $99.50 of native PRL - PearlBridge takes 0.5%. Coming
-back out, you would bridge PRL to WPRL yourself at pearlbridge.xyz, which costs
-another 0.5%, and then I can sell it. Happy with that?"
+Before selling: "Your 500 PRL becomes about 496 WPRL after PearlBridge's 4 PRL fee,
+then I sell it for USDC on Base. It can take a while to clear the bridge. Go ahead?"
 
-After: "Done - about 36.4 PRL is in your Pearl wallet. It is one wallet, yours
-permanently."
-
-When they hold only native PRL and want cash: "I can sell WPRL, but I cannot turn
-native PRL back into WPRL - that step is at pearlbridge.xyz and costs 0.5%. Once the
-WPRL is in your wallet, say the word and I will sell it."
+While waiting: "The bridge has your PRL and is waiting on Pearl confirmations. I will
+sell as soon as the WPRL lands - nothing for you to do."
