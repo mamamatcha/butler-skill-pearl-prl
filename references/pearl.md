@@ -45,12 +45,74 @@ without the token address changing. That is normal for bridges and worth saying
 plainly when an owner asks what the risk is. It is not a reason to refuse - it is a
 reason not to describe either as immutable.
 
+## Calling the bridge
+
+The bridge is an ordinary Ethereum contract. There is no Butler "bridge" feature and
+none is needed - `acp wallet send-transaction` reaches it like any other contract.
+
+**Everything below was read off live bridge transactions on 16 Oct 2026**, not from a
+doc. Nine owners used it that day.
+
+Two transactions, in this order:
+
+### 1. Allowance
+
+The bridge pulls the WPRL with `transferFrom`, so it needs an allowance first -
+confirmed by five `Approval` events granted to it that day.
+
+```text
+to    the WPRL token
+call  approve(spender = the bridge, amount = exactly what is being bridged)
+```
+
+**Never an unlimited allowance.** This is a third-party custodial contract that can be
+upgraded; an infinite approval on it is a standing invitation.
+
+### 2. The bridge call
+
+```text
+to        the bridge contract
+selector  0xd2f33ed6
+args      (uint256 amount, string prlAddress)
+```
+
+Standard ABI encoding, five 32-byte words in the observed calls:
+
+```text
+[0] amount        WPRL in its own 8-decimal units  (0x3b9aca00 = 1,000,000,000 = 10.00 WPRL)
+[1] 0x40          offset to the string
+[2] 0x3f          string length, 63
+[3] prl1praqglvllkn007qjsdp4n0l2m4ax      the destination, as UTF-8 bytes
+[4] htc6tpg23xnn0c4f0lklwnh8s9x0hls
+```
+
+The function's *name* is unknown and does not matter - the selector and the argument
+layout are what build the transaction.
+
+### What that call cost, measured
+
+One observed transaction bridged **10.00 WPRL** and moved **0.05 WPRL** to the bridge
+as its cut: **exactly 0.5%**, matching the published fee. What lands on the Pearl side
+is the remainder.
+
+### The destination is an argument, not a default
+
+`prlAddress` is a **native PRL bech32 address**: starts `prl1`, 63 characters. The
+bridge sends there and nowhere else, and it cannot be undone.
+
+```text
+prl1praqglvllkn007qjsdp4n0l2m4axhtc6tpg23xnn0c4f0lklwnh8s9x0hls
+```
+
+So "bridge it to my Pearl wallet" is not something the contract understands. The
+owner's address has to be known, and read back to them, before anything is signed.
+
 ## The asymmetry, which is the whole product risk
 
 | Leg | Who does it | Cost |
 | --- | --- | --- |
 | USDC → WPRL | Butler, `acp trade` | swap slippage |
-| WPRL → native PRL | Butler, `acp wallet bridge-prl` | 0.5% |
+| WPRL → native PRL | Butler, `approve` + `send-transaction` to the bridge | 0.5% |
 | **native PRL → WPRL** | **the owner, by hand at pearlbridge.xyz** | **0.5%** |
 | WPRL → USDC | Butler, `acp trade` | swap slippage |
 
