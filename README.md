@@ -1,58 +1,41 @@
 # butler-skill-pearl-prl
 
-The `pearl-prl` skill for [Butler](https://github.com/Virtual-Protocol/butler-skills).
-For the humans maintaining this repo — never published to a butler. Only `SKILL.md`
-and `references/**/*.md` reach one.
+Teaches a Butler agent to move its owner's money in and out of Pearl: buy native PRL with
+USDC, and sell it back for USDC on Base.
 
-## What it does
+- **Buy:** USDC → WPRL on Ethereum with `acp trade`, then WPRL → PRL into the owner's Pearl
+  wallet with `bevo-wallet bridge-prl`.
+- **Sell:** PRL → WPRL with `bevo-wallet bridge-wprl`, wait for it to land, then WPRL → USDC
+  on Base with `acp trade --chain-out 8453`.
 
-Buys WPRL on Ethereum with USDC and bridges it to native PRL, or sells WPRL back to
-USDC. Money-moving: every step is an `acp` money command with its own approval card
-and idempotency key.
+Two things shape how it works:
 
-## The thing this skill exists to get right
+- **Butler's own commands do the bridging, never the skill.** PearlBridge, a custodial third
+  party, carries PRL between Pearl and Ethereum. bevo-server builds every bridge call from
+  contract addresses it pins, checks PearlBridge's quote, and pays only the owner's own
+  Pearl wallet. The skill passes a wallet label and an amount, and holds no contract
+  address, calldata or PRL address.
+- **Each leg waits for the last to land.** Bridging out takes 6 Pearl confirmations, and a
+  large amount can sit a day in PearlBridge's slow lane. The skill never bridges or sells a
+  balance that has not arrived, and never re-runs a slow bridge: on the way out each bridge
+  costs at least 4 PRL.
 
-**Three of the four legs are automated and one is not.** Butler can take an owner in
-— buy, then bridge — in a single flow. Coming back requires them to visit
-**pearlbridge.xyz** themselves and bridge PRL → WPRL by hand before Butler can sell.
+Not yet listed: `bevo-wallet bridge-wprl` has not shipped, and the hub's validator does not
+yet know `bevo-wallet`.
 
-So the skill is built to say the exit *before* the price, and to require a yes to the
-one-way exit specifically, not just to the amount. An owner who deposits without
-understanding that has been mis-sold however smooth the rest of the flow is.
+One Butler skill, published by the
+[Butler skill hub](https://github.com/Virtual-Protocol/butler-skills): the hub's
+`skills.json` lists it by name, repo and ref.
 
-## Facts worth knowing before changing anything
+- `SKILL.md` — the playbook (see the hub's
+  [SKILL_STANDARD.md](https://github.com/Virtual-Protocol/butler-skills/blob/main/SKILL_STANDARD.md))
+- `references/pearl.md` — the facts the playbook points to: identifying WPRL, its 8
+  decimals, fees, and how each bridge works
+- `CHANGELOG.md` — one entry per version; every change bumps `version` in SKILL.md
 
-- **WPRL has 8 decimals, not 18.** An amount computed against 18 is wrong by 10^10.
-- **WPRL and PearlBridge are both EIP-1967 proxies** — upgradeable, so neither should
-  ever be described as immutable.
-- **PearlBridge is custodial and third-party**, 0.5% each way (~1% round trip).
-- **The Pearl wallet is one per owner and permanent** (a Privy limit).
-- Ethereum mainnet only, $25 minimum.
-
-All verified on-chain 15 Oct 2026; `references/pearl.md` carries the detail.
-
-## Open question before this can be listed
-
-The original notes called the bridge `bevo-wallet bridge-prl`. **`bevo-wallet` is not
-a command the Butler container has** — the validator rejects it outright (its own are
-`acp`, `app-checkout`, `bevo-automation`, `bevo-notify`, `bevo-read`, `bevo-rpc`,
-`bevo-send`, `bevo-sms`, `bevo-x`). This skill uses `acp wallet bridge-prl`, which
-passes validation because the `wallet` group's subcommands are not enumerated.
-
-**That is not the same as the subcommand existing.** Someone with access to `acp-cli`
-needs to confirm `wallet bridge-prl` is real, and correct the call if it is spelled
-differently. Until then the bridge step is unverified — the buy and sell legs are
-ordinary `acp trade` and are fine.
-
-## Validating a change
+Validate locally:
 
 ```sh
 curl -sSLO https://virtual-protocol.github.io/butler-skills/tools/validate.py
 python3 validate.py --standalone .
 ```
-
-## Releasing
-
-Bump `version` in `SKILL.md`, add the `CHANGELOG.md` entry, merge to `main`. A
-published `name@version` is immutable. Listing a skill is maintainer-only, and a
-money-moving skill needs two maintainer reviews.
