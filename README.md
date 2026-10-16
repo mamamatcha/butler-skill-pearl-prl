@@ -26,23 +26,40 @@ understanding that has been mis-sold however smooth the rest of the flow is.
 - **WPRL and PearlBridge are both EIP-1967 proxies** — upgradeable, so neither should
   ever be described as immutable.
 - **PearlBridge is custodial and third-party**, 0.5% each way (~1% round trip).
-- **The Pearl wallet is one per owner and permanent** (a Privy limit).
+- **The Pearl wallet is one per owner and permanent** (a Privy limit), and its
+  address is a **required argument** to the bridge.
 - Ethereum mainnet only, $25 minimum.
 
 All verified on-chain 15 Oct 2026; `references/pearl.md` carries the detail.
 
-## Open question before this can be listed
+## How the bridge actually works
 
-The original notes called the bridge `bevo-wallet bridge-prl`. **`bevo-wallet` is not
-a command the Butler container has** — the validator rejects it outright (its own are
-`acp`, `app-checkout`, `bevo-automation`, `bevo-notify`, `bevo-read`, `bevo-rpc`,
-`bevo-send`, `bevo-sms`, `bevo-x`). This skill uses `acp wallet bridge-prl`, which
-passes validation because the `wallet` group's subcommands are not enumerated.
+The original notes called it `bevo-wallet bridge-prl`. **That command does not
+exist** — `bevo-wallet` is not a Butler container command at all, and the validator
+rejects it outright.
 
-**That is not the same as the subcommand existing.** Someone with access to `acp-cli`
-needs to confirm `wallet bridge-prl` is real, and correct the call if it is spelled
-differently. Until then the bridge step is unverified — the buy and sell legs are
-ordinary `acp trade` and are fine.
+It turns out none is needed. **The bridge is an ordinary Ethereum contract**, and
+`acp wallet send-transaction` — a documented Butler money command — reaches it like
+any other. Two transactions: `approve`, then the bridge call.
+
+Everything about that call was read off **live bridge transactions on 16 Oct 2026**,
+not from a doc:
+
+| | |
+| --- | --- |
+| Selector | `0xd2f33ed6` (nine real calls that day) |
+| Arguments | `(uint256 amount, string prlAddress)` |
+| Amount units | WPRL's own **8 decimals** |
+| Destination | native PRL bech32, `prl1…`, 63 chars — **an argument, not a default** |
+| Allowance | required; the bridge pulls with `transferFrom` (five approvals that day) |
+| Fee, measured | 10.00 WPRL bridged → 0.05 WPRL taken = **exactly 0.5%** |
+
+The function's name is unknown and irrelevant — the selector and argument layout are
+what build the transaction. `references/pearl.md` carries the encoding.
+
+**Consequence for the flow:** the bridge sends to an address it is given. "Bridge it
+to my Pearl wallet" is not something the contract understands, so the owner's native
+PRL address must be known, and read back to them, before anything is signed.
 
 ## Validating a change
 

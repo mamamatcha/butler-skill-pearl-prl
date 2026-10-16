@@ -33,9 +33,11 @@ Four things, and the first one decides whether to go ahead at all.
 
 3. **How much, and where it comes from.** Minimum is **$25** of USDC, on Ethereum.
 
-4. **The Pearl wallet is one per owner and permanent.** It is created on the first
-   deposit and cannot be swapped for another later. Nothing is sent to an address they
-   chose - this is the wallet Butler makes for them.
+4. **The Pearl wallet is one per owner and permanent**, and **the bridge needs its
+   address as an argument.** It is not implicit: the contract takes a native PRL
+   address (`prl1…`, 63 characters) and sends there. Butler must have that address
+   before bridging, and must read it back to the owner before signing - a wrong one
+   sends the money to a stranger, irreversibly.
 
 Read what they actually hold before proposing anything, and resolve WPRL to an exact
 contract rather than trusting any address written down anywhere:
@@ -86,16 +88,30 @@ never paste one from notes - a wrong address here sends their money to a strange
    bevo-read token-balance <WPRL_ADDRESS>
    ```
 
-4. [FIXED] Bridge it to native PRL. Second money command, second approval:
+4. [FIXED] Let the bridge take the WPRL. It pulls with `transferFrom`, so it needs
+   an allowance first. Money command, approval card:
 
    ```sh
-   acp wallet bridge-prl --amount <WPRL_AMOUNT> --idempotency-key <KEY>:bridge
+   acp wallet send-transaction --chain 1 --to <WPRL_ADDRESS> --data <APPROVE_CALLDATA> --idempotency-key <KEY>:approve
    ```
 
-   The Pearl wallet is created here if it does not exist. Do not run a separate
-   setup step.
+   `<APPROVE_CALLDATA>` is a standard ERC-20 `approve(spender, amount)` for exactly
+   the amount being bridged, with the bridge as spender. Never an unlimited
+   allowance: this is a third-party custodial contract.
 
-5. [ADAPT] Tell them what landed and where, and repeat the exit once, briefly.
+5. [FIXED] Bridge it. Second money command, second approval card:
+
+   ```sh
+   acp wallet send-transaction --chain 1 --to <BRIDGE_ADDRESS> --data <BRIDGE_CALLDATA> --idempotency-key <KEY>:bridge
+   ```
+
+   `<BRIDGE_CALLDATA>` is selector `0xd2f33ed6` with two arguments: the amount in
+   WPRL's own 8-decimal units, and the owner's native PRL address as a string.
+   `references/pearl.md` has the exact encoding. **Read the destination address back
+   to the owner before this is signed.**
+
+6. [ADAPT] Tell them what landed and where, and repeat the exit once, briefly. The
+   bridge keeps 0.5%, so what arrives is slightly less than what left.
 
 ### Selling out
 
@@ -146,13 +162,17 @@ on money that is already across.
 | Buy filled but bridge failed | The WPRL is theirs and safe in their wallet. Say that first, then offer to bridge again. Never re-run the buy. |
 | Bridge outcome unclear | Look the key up. Never bridge again on a guess. |
 | Owner holds only native PRL and wants out | Give them the pearlbridge.xyz step. Offer to sell when the WPRL arrives. |
-| `bridge-prl` is not a command | Say the bridge is not available from Butler right now, and that their WPRL is untouched. |
+| Approve filled but the bridge call failed | The WPRL is still theirs and still in their wallet. Say that first. Re-quote and offer the bridge again; never re-run the buy. |
+| No native PRL address for the owner | Stop. The bridge cannot be called without one, and guessing it loses the money. |
+| Owner's PRL address does not start `prl1` or is not 63 characters | Refuse. Do not send to it. |
 | `token-search WPRL` returns nothing, or several | Ask the owner for the contract, or stop. Never pick one yourself. |
 
 ## Limits
 
-- **One direction is automated.** In: buy and bridge. Out: selling WPRL only. PRL →
-  WPRL is manual, on a third-party site.
+- **One direction is automated.** In: buy, approve, bridge. Out: selling WPRL only.
+  PRL → WPRL is manual, on a third-party site.
+- **The bridge is a contract call, not a Butler feature.** It is reached with
+  `acp wallet send-transaction` on Ethereum, like any other contract.
 - **PearlBridge is custodial and third-party**, 0.5% each way. Funds sit with it
   mid-flight. Neither Virtuals nor Butler controls it or can recover a stuck bridge.
 - **WPRL and the bridge are both upgradeable contracts.** Whoever holds the upgrade
