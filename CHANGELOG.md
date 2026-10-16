@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- Corrected the `acp trade` flags: the chain is named with `--chain-out` when buying
+  and `--chain-in` when selling, not `--chain`. Taken from the shipped
+  `index-rebalance` template rather than guessed; the first version would have failed
+  at runtime.
+
 - First release. Buys WPRL with USDC on Ethereum and bridges it to native PRL; sells
   WPRL back to USDC.
 - **The one-way exit is said before the price**, and the flow needs a yes to it

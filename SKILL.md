@@ -71,11 +71,13 @@ never paste one from notes - a wrong address here sends their money to a strange
    card:
 
    ```sh
-   acp trade --token-in usdc --amount-in <AMOUNT_USD> --token-out <WPRL_ADDRESS> --chain 1 --idempotency-key <KEY>:buy
+   acp trade --token-in usdc --amount-in <AMOUNT_USD> --token-out <WPRL_ADDRESS> --chain-out 1 --idempotency-key <KEY>:buy
    ```
 
    `<WPRL_ADDRESS>` is the contract the owner confirmed from `token-search`, never one
-   written into this skill.
+   written into this skill. The chain flag is `--chain-out` when buying and
+   `--chain-in` when selling - it names the side the non-USDC token sits on, and
+   `--chain` is not a flag `acp trade` takes.
 
 3. [FIXED] Confirm the WPRL actually arrived before bridging. Bridging a balance that
    is not there yet fails halfway:
@@ -116,7 +118,7 @@ never paste one from notes - a wrong address here sends their money to a strange
 3. [FIXED] Sell it:
 
    ```sh
-   acp trade --token-in <WPRL_ADDRESS> --amount-in <AMOUNT> --token-out usdc --chain 1 --idempotency-key <KEY>:sell
+   acp trade --token-in <WPRL_ADDRESS> --chain-in 1 --amount-in <AMOUNT> --token-out usdc --idempotency-key <KEY>:sell
    ```
 
 ## Idempotency and retries
