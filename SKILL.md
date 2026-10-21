@@ -1,7 +1,7 @@
 ---
 name: pearl-prl
 description: Move money in and out of Pearl - buy native PRL with USDC by way of WPRL on Ethereum and PearlBridge, or bridge PRL back to WPRL and sell it for USDC on Base.
-version: 0.1.0
+version: 0.1.1
 metadata: {"butler":{"moneyMoving":true,"keywords":["prl","pearl","wprl","buy prl","sell prl","bridge prl","native prl","pearl wallet","pearlbridge","wrapped pearl","get prl","cash out prl"],"requires":{"bins":["acp","bevo-read","bevo-wallet"]}}}
 ---
 
@@ -116,8 +116,12 @@ contract and never paste one from notes.
    bevo-wallet bridge-wprl --wallet <PEARL_LABEL> --amount <PRL_AMOUNT> --idempotency-key <KEY>:bridge-out
    ```
 
-   `<PRL_AMOUNT>` is a plain decimal, at most 8 places, no more than the Pearl
-   balance `bevo-wallet list` showed. The WPRL lands in Butler's Ethereum wallet.
+   `<PRL_AMOUNT>` is a plain decimal, at most 8 places, below the Pearl balance
+   `bevo-wallet list` showed. To bridge all of it, pass `--all` in place of
+   `--amount <PRL_AMOUNT>`: Pearl's network fee is paid from the wallet on top of
+   the amount, so the whole balance never fits as an `--amount`. The command prints
+   what leaves the Pearl wallet and what arrives; tell the owner both. The WPRL
+   lands in Butler's Ethereum wallet.
 
 3. [FIXED] Wait for the WPRL to land before selling. Check the bridge, then the
    balance; re-run these a few minutes apart until the WPRL is there:
@@ -167,6 +171,7 @@ on the way out another 4 PRL at least.
 | Buy filled but bridge-in failed | The WPRL is theirs, in their Ethereum wallet. Say that first, then offer to bridge again. Never re-run the buy. |
 | Bridge-out sent, WPRL not yet landed | Still in flight: 6 confirmations, or the slow lane. Check again later. Never bridge again. |
 | Bridge-out failed | The PRL is still theirs, in their Pearl wallet. Say that first. |
+| Bridge-out refused as `pearl_balance_short` | The amount plus Pearl's network fee is more than the wallet holds. Nothing moved. Offer the maximum it names, or `--all`. |
 | WPRL landed but the sale failed | The WPRL is theirs, in their Ethereum wallet. Offer to sell again. Never bridge again. |
 | PearlBridge paused, unreachable, or past its daily limit | Nothing moved. Say so, and offer later or a smaller amount. |
 | Bridge refuses its own quote as untrusted | Stop. A contract moved or was upgraded; do not work around it. |

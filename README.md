@@ -20,9 +20,6 @@ Two things shape how it works:
   balance that has not arrived, and never re-runs a slow bridge: on the way out each bridge
   costs at least 4 PRL.
 
-Not yet listed: `bevo-wallet bridge-wprl` has not shipped, and the hub's validator does not
-yet know `bevo-wallet`.
-
 One Butler skill, published by the
 [Butler skill hub](https://github.com/Virtual-Protocol/butler-skills): the hub's
 `skills.json` lists it by name, repo and ref.

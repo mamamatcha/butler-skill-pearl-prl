@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1
+
+- **`bevo-wallet bridge-wprl` has shipped** (virtuals-agent#194, #203; bevo-server#1105),
+  so the sell path runs as written.
+- **Bridging the whole Pearl balance uses `--all`.** Pearl's network fee is paid from
+  the wallet on top of the amount, so `--amount` set to the full balance is refused as
+  `pearl_balance_short`. The skill says to pass `--all`, and what to do on that refusal.
+- README: drops the "not yet listed" note.
+
 ## 0.1.0
 
 - First release. **Buy:** USDC → WPRL on Ethereum, then bridge to native PRL in the

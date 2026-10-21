@@ -68,7 +68,9 @@ pearlAddress)`, selector `0xd2f33ed6`, amount in WPRL's 8-decimal units. Observe
 
 ## Bridging back: PRL → WPRL
 
-`bevo-wallet bridge-wprl --wallet <Pearl wallet> --amount <prl>`. PearlBridge's side
+`bevo-wallet bridge-wprl --wallet <Pearl wallet> --amount <prl>`, or `--all` for the
+whole balance: Pearl's network fee is paid on top of the amount, so the balance itself
+is always refused (`pearl_balance_short`, which names the maximum). PearlBridge's side
 of it, from its own API (`api.pearlbridge.xyz/v1`, read 16 Oct 2026):
 
 - PRL is sent from the Pearl wallet to a **deposit address PearlBridge derives for
