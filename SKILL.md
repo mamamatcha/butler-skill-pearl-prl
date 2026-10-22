@@ -54,6 +54,12 @@ contract and never paste one from notes.
 
 ## Procedure
 
+Each leg is its own approval card, and the next needs the last one settled. Nothing
+tells you when the owner approves a card, so **every card ends your turn with a
+hand-off**: point them to the card, say what you will do once it fills, and ask them
+to tell you when they have approved it. When they write again, pick the flow up -
+see "Picking up a flow".
+
 ### Buying PRL
 
 1. [ADAPT] Say the whole shape back in one message. `references/pearl.md` has the
@@ -61,11 +67,14 @@ contract and never paste one from notes.
 
    ```text
    $100 of USDC buys WPRL on Ethereum, then PearlBridge turns it into native PRL
-   in your Pearl wallet, keeping 0.5%. Coming back out costs 0.5% with a 4 PRL
-   minimum, plus the trade back to USDC.
+   in your Pearl wallet, keeping 0.5%. That is two cards: the buy, then the
+   bridge - once you've approved the buy, tell me and I'll file the bridge.
+   Coming back out costs 0.5% with a 4 PRL minimum, plus the trade back to USDC.
    ```
 
-   Get a clear yes before moving anything.
+   Note the WPRL balance they hold now (`bevo-read token-balance <WPRL_ADDRESS>`) so
+   you know later what the buy added. Then **end your turn and wait for a clear
+   yes** - a card is not that yes, so file nothing before it.
 
 2. [FIXED] Buy WPRL with their USDC. Money command, approval card:
 
@@ -75,14 +84,21 @@ contract and never paste one from notes.
 
    `<WPRL_ADDRESS>` is the contract confirmed above, never one written into this
    skill. The chain flag is `--chain-out` when buying and `--chain-in` when selling -
-   it names the side WPRL sits on.
+   it names the side WPRL sits on. Leave out `--chain-in`: the server finds the cash
+   wherever it is, Base included, so do not warn the owner about which chain it sits
+   on. It returns once the card is filed; nothing has traded yet. Hand off:
+   "Approve the buy card below. Once it fills, tell me and I'll bridge the WPRL into
+   your Pearl wallet."
 
-3. [FIXED] Confirm the WPRL arrived before bridging. Bridging a balance that is not
-   there yet fails:
+3. [FIXED] When they are back, check the buy and read what arrived:
 
    ```sh
+   bevo-read request <KEY>:buy --route trade
    bevo-read token-balance <WPRL_ADDRESS>
    ```
+
+   Go on only when `approvalStatus` is `confirmed`; otherwise see "Picking up a
+   flow". What the buy added is this balance less the one noted in step 1.
 
 4. [FIXED] Bridge it into their Pearl wallet. Money command, approval card:
 
@@ -91,12 +107,14 @@ contract and never paste one from notes.
    ```
 
    `<PEARL_LABEL>` is their Pearl wallet's label from `bevo-wallet list`.
-   `<WPRL_AMOUNT>` is a plain decimal, at most 8 places - what step 3 showed, never a
-   base-unit number. Butler builds the approve and the burn itself against
-   PearlBridge's quote; the card shows what arrives after the fee.
+   `<WPRL_AMOUNT>` is a plain decimal, at most 8 places - what the buy added, never
+   a base-unit number, and never WPRL they held before unless they asked. Butler
+   builds the approve and the burn itself against PearlBridge's quote; the card
+   shows what arrives after the fee. Hand off: "Approve the bridge card below - the
+   PRL lands in your Pearl wallet some minutes after, 0.5% less than left."
 
-5. [ADAPT] Tell them what is on its way and where. PRL lands some minutes after the
-   card executes, 0.5% less than left.
+5. [ADAPT] If they ask, or come back to it, check the bridge with
+   `bevo-read request <KEY>:bridge-in --route pearl_bridge_in` and tell them.
 
 ### Selling PRL
 
@@ -104,11 +122,12 @@ contract and never paste one from notes.
 
    ```text
    PearlBridge turns your 500 PRL into about 496 WPRL on Ethereum (fee: 4 PRL),
-   then I sell that for USDC on Base. The bridge needs 6 Pearl confirmations;
-   a large amount can wait up to a day in PearlBridge's slow lane.
+   then I sell that for USDC on Base - two cards. The bridge needs 6 Pearl
+   confirmations; a large amount can wait up to a day in PearlBridge's slow lane.
    ```
 
-   Get a clear yes. If they already hold WPRL and want only that sold, skip to step 4.
+   Note the WPRL balance they hold now, as when buying, then **end your turn and wait
+   for a clear yes**. If they already hold WPRL and want only that sold, skip to step 4.
 
 2. [FIXED] Bridge PRL back to WPRL. Money command, approval card:
 
@@ -120,19 +139,22 @@ contract and never paste one from notes.
    `bevo-wallet list` showed. To bridge all of it, pass `--all` in place of
    `--amount <PRL_AMOUNT>`: Pearl's network fee is paid from the wallet on top of
    the amount, so the whole balance never fits as an `--amount`. The command prints
-   what leaves the Pearl wallet and what arrives; tell the owner both. The WPRL
-   lands in Butler's Ethereum wallet.
+   what leaves the Pearl wallet and what arrives; tell the owner both. Hand off:
+   "Approve the bridge card below. The WPRL lands some minutes after - tell me once
+   you've approved and I'll sell it as soon as it's there."
 
-3. [FIXED] Wait for the WPRL to land before selling. Check the bridge, then the
-   balance; re-run these a few minutes apart until the WPRL is there:
+3. [FIXED] When they are back, check the bridge and whether the WPRL has landed:
 
    ```sh
-   bevo-read request <KEY>:bridge-out
+   bevo-read request <KEY>:bridge-out --route pearl_bridge_out
    bevo-read token-balance <WPRL_ADDRESS>
    ```
 
-   **Never re-run the bridge because the WPRL is slow** - that is a second bridge and
-   a second 4 PRL minimum. Tell the owner it is still in flight.
+   A confirmed card means the PRL left; the WPRL is minted after 6 Pearl
+   confirmations. If it has not landed yet, say it is still in flight and ask them
+   to check back in a few minutes (a day, if the bridge said slow lane). **Never
+   re-run the bridge because the WPRL is slow** - that is a second bridge and a
+   second 4 PRL minimum.
 
 4. [FIXED] Sell the WPRL for USDC on Base. Money command, approval card:
 
@@ -140,11 +162,27 @@ contract and never paste one from notes.
    acp trade --token-in <WPRL_ADDRESS> --chain-in 1 --amount-in <WPRL_AMOUNT> --token-out usdc --chain-out 8453 --idempotency-key <KEY>:sell
    ```
 
-   `<WPRL_AMOUNT>` is what step 3 showed arrived. One command sells on Ethereum and
-   moves the USDC to Base; it blocks until the USDC lands, which can take a few
-   minutes. Keep it running rather than re-issuing.
+   `<WPRL_AMOUNT>` is what the bridge added (or what they asked to sell). One
+   trade sells on Ethereum and moves the USDC to Base. Hand off: "Approve the sale
+   card below - the cash lands on Base a few minutes after."
 
-5. [ADAPT] Tell them how much USDC landed on Base.
+5. [ADAPT] If they ask, or come back to it, check `bevo-read request <KEY>:sell
+   --route trade` and `bevo-read assets`, and tell them how much USDC landed.
+
+### Picking up a flow
+
+When the owner writes with a buy or sell unfinished - "done", "approved", or
+anything about it - resume it before anything new. Check the key of the last card
+filed and go by its `approvalStatus`:
+
+| `approvalStatus` | Do |
+| --- | --- |
+| `pending` | Not approved yet. Say which card is waiting and that it is under your earlier reply, and in their Approvals list. |
+| `confirmed` | It ran. Go on to the next step. |
+| `rejected` | They declined it. Nothing moved; the flow ends there. |
+| `failed` | It may still have run. Read the balance it would change and report it. **Never file it again.** |
+
+A step with a key already filed is never filed again - look it up.
 
 ## Idempotency and retries
 
@@ -194,5 +232,5 @@ Before buying: "$100 of USDC gets you about $99.50 of native PRL - PearlBridge t
 Before selling: "Your 500 PRL becomes about 496 WPRL after PearlBridge's 4 PRL fee,
 then I sell it for USDC on Base. It can take a while to clear the bridge. Go ahead?"
 
-While waiting: "The bridge has your PRL and is waiting on Pearl confirmations. I will
-sell as soon as the WPRL lands - nothing for you to do."
+While waiting: "The bridge has your PRL and is waiting on Pearl confirmations. Check
+back with me in a few minutes and I'll sell it once the WPRL lands."

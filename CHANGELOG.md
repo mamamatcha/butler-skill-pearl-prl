@@ -7,6 +7,14 @@
 - **Bridging the whole Pearl balance uses `--all`.** Pearl's network fee is paid from
   the wallet on top of the amount, so `--amount` set to the full balance is refused as
   `pearl_balance_short`. The skill says to pass `--all`, and what to do on that refusal.
+- **Every card ends with a hand-off.** A card from chat returns before anything runs,
+  and nothing wakes the agent when the owner approves, so a buy used to stop at the
+  WPRL with no word of the bridge. Each card step now tells the owner what comes
+  next and to say when they've approved, and "Picking up a flow" resumes on their
+  next message from the last card's `approvalStatus`, never re-filing a step. (An
+  in-turn wait was tried and dropped: it holds the chat, queuing anything else the
+  owner sends.)
+- The buy leaves out `--chain-in`; the server finds the cash on any chain.
 - README: drops the "not yet listed" note.
 
 ## 0.1.0
